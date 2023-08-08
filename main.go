@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -18,31 +19,68 @@ import (
 	kubectlcmd "k8s.io/kubectl/pkg/cmd"
 )
 
+type action string
+
 const (
-	owner = "kubernetes-sigs"
-	repo  = "kwok"
+	owner         = "kubernetes-sigs"
+	repo          = "kwok"
+	apply  action = "apply"
+	delete action = "delete"
 )
 
 func main() {
-	// create tmp working directory for kwok
-	tmpDir, err := ioutil.TempDir("", "install-kwok")
+	rel, err := GetLatestKwokRelease()
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	if err := InstallKwok(rel); err != nil {
+		panic(err)
+	}
 
+	time.Sleep(20 * time.Second)
+	if err := UninstallKwok(rel); err != nil {
+		panic(err)
+	}
+}
+
+// UninstallKwok uninstalls kwok from the cluster
+func UninstallKwok(release string) error {
+	return kwokKubectl(release, delete)
+}
+
+// InstallKwok installs kwok in the cluster
+func InstallKwok(release string) error {
+	return kwokKubectl(release, apply)
+}
+
+func GetLatestKwokRelease() (string, error) {
 	// find latest release of `kwok`
 	client := github.NewClient(nil)
 	rel, resp, err := client.Repositories.GetLatestRelease(context.Background(), owner, repo)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
 	if resp.Response.StatusCode != http.StatusOK {
 		log.Fatal("expected 200 response but received", resp.Response.StatusCode)
 	}
 
-	latestRelease := rel.GetTagName()
+	return rel.GetTagName(), nil
+}
+
+// kwokKubectl builds kustomize for kwok and runs `kubectl` on it
+func kwokKubectl(release string, action action) error {
+
+	if release == "" {
+		return fmt.Errorf("release is empty: '%s'", release)
+	}
+
+	// create tmp working directory for kwok
+	tmpDir, err := ioutil.TempDir("", "install-kwok")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
 
 	// create kustomization file
 	kustomizeTemplate := `
@@ -56,20 +94,20 @@ resources:
 `
 	tmpl, err := template.New("kwok-kustomize").Parse(kustomizeTemplate)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	b := &bytes.Buffer{}
 	err = tmpl.Execute(b, map[string]interface{}{
-		"latestRelease": latestRelease,
+		"latestRelease": release,
 		"repo":          owner + "/" + repo,
 	})
 
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	fmt.Println("latest:", latestRelease)
+	log.Infof("latest kwok release is %s", release)
 
 	kustomizationFilePath := filepath.Join(tmpDir, "kustomization.yaml")
 	if err := os.WriteFile(kustomizationFilePath,
@@ -79,12 +117,13 @@ resources:
 	}
 
 	// `kubectl apply` using kustomize
-	o, err := runKubectl("kubectl", "apply", "-k", tmpDir)
+	o, err := runKubectl("kubectl", string(action), "-k", tmpDir)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	fmt.Println("o", string(o))
+	log.Infof("kubectl output: \n%s", string(o))
 
+	return nil
 }
 
 // based on argo-workflows executor
