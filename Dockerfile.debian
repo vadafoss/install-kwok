@@ -1,0 +1,6 @@
+ARG BASEIMAGE=debian
+FROM $BASEIMAGE
+
+COPY install-kwok /install-kwok
+WORKDIR /
+CMD ["/install-kwok"]
