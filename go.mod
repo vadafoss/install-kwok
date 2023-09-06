@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/google/go-github/v53 v53.2.0
 	github.com/sirupsen/logrus v1.9.3
+	golang.org/x/mod v0.9.0
 	k8s.io/cli-runtime v0.27.4
 	k8s.io/kubectl v0.27.4
 )

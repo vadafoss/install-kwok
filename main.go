@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/mod/semver"
 
 	"github.com/google/go-github/v53/github"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -22,10 +23,11 @@ import (
 type action string
 
 const (
-	owner         = "kubernetes-sigs"
-	repo          = "kwok"
-	apply  action = "apply"
-	delete action = "delete"
+	owner             = "kubernetes-sigs"
+	repo              = "kwok"
+	apply      action = "apply"
+	delete     action = "delete"
+	minVersion        = "v0.4.0"
 )
 
 func main() {
@@ -33,24 +35,41 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if err := InstallKwok(rel); err != nil {
+
+	c := semver.Compare(rel, minVersion)
+	if c < 0 {
+		log.Fatalf("latest release %s is a lower version than min required version %s\n", rel, minVersion)
+	}
+
+	LegacyInstallAndUninstall(rel)
+
+}
+
+// LegacyInstallAndUninstall installs and uninstalls kwok the legacy way
+func LegacyInstallAndUninstall(release string) {
+	c := semver.Compare(release, minVersion)
+	if c > 0 {
+		log.Fatalf("release %s is a version higher than version %s\n", release, minVersion)
+	}
+
+	if err := InstallKwokLegacy(release); err != nil {
 		panic(err)
 	}
 
 	time.Sleep(20 * time.Second)
-	if err := UninstallKwok(rel); err != nil {
+	if err := UninstallKwokLegacy(release); err != nil {
 		panic(err)
 	}
 }
 
-// UninstallKwok uninstalls kwok from the cluster
-func UninstallKwok(release string) error {
-	return kwokKubectl(release, delete)
+// UninstallKwokLegacy uninstalls kwok < v0.4.0 from the cluster
+func UninstallKwokLegacy(release string) error {
+	return kwokKubectlLegacy(release, delete)
 }
 
-// InstallKwok installs kwok in the cluster
-func InstallKwok(release string) error {
-	return kwokKubectl(release, apply)
+// InstallKwokLegacy installs kwok < v0.4.0 in the cluster
+func InstallKwokLegacy(release string) error {
+	return kwokKubectlLegacy(release, apply)
 }
 
 func GetLatestKwokRelease() (string, error) {
@@ -68,8 +87,8 @@ func GetLatestKwokRelease() (string, error) {
 	return rel.GetTagName(), nil
 }
 
-// kwokKubectl builds kustomize for kwok and runs `kubectl` on it
-func kwokKubectl(release string, action action) error {
+// kwokKubectlLegacy builds kustomize for kwok < v0.4.0 and runs `kubectl` on it
+func kwokKubectlLegacy(release string, action action) error {
 
 	if release == "" {
 		return fmt.Errorf("release is empty: '%s'", release)
