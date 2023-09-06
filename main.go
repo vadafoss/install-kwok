@@ -28,7 +28,10 @@ const (
 	apply      action = "apply"
 	delete     action = "delete"
 	minVersion        = "v0.4.0"
+	kwokRepo          = "kubernetes-sigs/kwok"
 )
+
+var installRelease string
 
 func main() {
 	rel, err := GetLatestKwokRelease()
@@ -41,8 +44,68 @@ func main() {
 		log.Fatalf("latest release %s is a lower version than min required version %s\n", rel, minVersion)
 	}
 
-	LegacyInstallAndUninstall(rel)
+	installRelease = rel
 
+	// clean existing release if any
+	if err := UninstallKwok(); err != nil {
+		panic(err)
+	}
+
+	if err := InstallKwok(); err != nil {
+		panic(err)
+	}
+
+	time.Sleep(time.Second * 20)
+	if err := UninstallKwok(); err != nil {
+		panic(err)
+	}
+
+}
+
+// InstallKwok installs kwok >= v0.4.0
+// Based on https://kwok.sigs.k8s.io/docs/user/kwok-in-cluster/#deploy-kwok-in-a-cluster
+func InstallKwok() error {
+	return kwokKubectl(apply, nil)
+}
+
+// UninstallKwok uninstalls kwok >= v0.4.0
+// Based on https://kwok.sigs.k8s.io/docs/user/kwok-in-cluster/#deploy-kwok-in-a-cluster
+func UninstallKwok() error {
+	return kwokKubectl(delete, []string{"--ignore-not-found=true"})
+}
+
+func kwokKubectl(action action, extraArgs []string) error {
+	deploymentAndCRDs := fmt.Sprintf("https://github.com/%s/releases/download/%s/kwok.yaml", kwokRepo, installRelease)
+	// fmt.Println("deploymentAndCRDs URL", deploymentAndCRDs) // for debugging
+	// `kubectl apply` deployment and CRDs
+	cmd := []string{
+		"kubectl", string(action), "-f", deploymentAndCRDs,
+	}
+	if len(extraArgs) > 0 {
+		cmd = append(cmd, extraArgs...)
+	}
+	o, err := runKubectl(cmd...)
+	if err != nil {
+		return err
+	}
+	log.Infof("kubectl output: \n%s", string(o))
+
+	stagesCRs := fmt.Sprintf("https://github.com/%s/releases/download/%s/stage-fast.yaml", kwokRepo, installRelease)
+	// fmt.Println("stagesCRs URL", stagesCRs) // for debugging
+	// `kubectl apply` stages
+	cmd = []string{
+		"kubectl", string(action), "-f", stagesCRs,
+	}
+	if len(extraArgs) > 0 {
+		cmd = append(cmd, extraArgs...)
+	}
+	o, err = runKubectl(cmd...)
+	if err != nil {
+		return err
+	}
+	log.Infof("kubectl output: \n%s", string(o))
+
+	return nil
 }
 
 // LegacyInstallAndUninstall installs and uninstalls kwok the legacy way
