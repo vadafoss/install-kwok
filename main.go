@@ -11,7 +11,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/mod/semver"
 
 	"github.com/google/go-github/v53/github"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -20,7 +19,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	kubeclient "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 	kubectlcmd "k8s.io/kubectl/pkg/cmd"
 )
 
@@ -33,32 +32,36 @@ func init() {
 
 func main() {
 
-	// Check and load kubeconfig from the path set
-	// in KUBECONFIG env variable (if not use default path of ~/.kube/config)
-	apiConfig, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
+	// // Check and load kubeconfig from the path set
+	// // in KUBECONFIG env variable (if not use default path of ~/.kube/config)
+	// apiConfig, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// // Create rest config from kubeconfig
+	// restConfig, err := clientcmd.NewDefaultClientConfig(*apiConfig, &clientcmd.ConfigOverrides{}).ClientConfig()
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	restConfig, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err)
 	}
-
-	// Create rest config from kubeconfig
-	restConfig, err := clientcmd.NewDefaultClientConfig(*apiConfig, &clientcmd.ConfigOverrides{}).ClientConfig()
-	if err != nil {
-		panic(err)
-	}
-
 	kubeClient := kubeclient.NewForConfigOrDie(restConfig)
 
-	rel, err := GetLatestKwokRelease()
-	if err != nil {
-		panic(err)
-	}
+	// rel, err := GetLatestKwokRelease()
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	c := semver.Compare(rel, constants.MinVersion)
-	if c < 0 {
-		log.Fatalf("latest release %s is a lower version than min required version %s\n", rel, constants.MinVersion)
-	}
+	// c := semver.Compare(rel, constants.MinVersion)
+	// if c < 0 {
+	// 	log.Fatalf("latest release %s is a lower version than min required version %s\n", rel, constants.MinVersion)
+	// }
 
-	installRelease = rel
+	installRelease = constants.MinVersion
 
 	// if err := DeleteClusterRoleBinding(kubeClient); !errors.IsNotFound(err) {
 	// 	log.Infof("failed deleting existing `kwok-provider` ClusterRoleBinding: %v", err)

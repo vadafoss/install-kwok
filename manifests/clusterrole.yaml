@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+  name: install-kwok-clusterrole
+rules:
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterrolebindings
+    # resourceNames:
+    #   - kwok-provider
+    verbs:
+      - create
+      - delete
